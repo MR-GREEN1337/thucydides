@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowRight, Paperclip, Mic, Bot, Zap, AlertTriangle, Loader2, X, BrainCircuit, MessageSquareQuote } from "lucide-react";
+import { ArrowRight, Paperclip, Mic, Bot, Zap, AlertTriangle, Loader2, X, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,8 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStartDialogue } from "@/hooks/useStartDialogue";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 // --- TYPES ---
 interface Step { id: string; type: 'log' | 'match' | 'error'; payload: any; }
@@ -17,21 +19,22 @@ interface Figure { id: string; name: string; avatar: string; }
 
 // --- CHILD COMPONENTS ---
 
-// Visual indicator for when the app is listening to voice input
+// FIXED: Corrected the JSX syntax here
 const SoundWave = () => (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1">
-        {[0, 1, 2, 3].map(i => (
-            <motion.div key={i} className="w-1 bg-blue-500"
-                animate={{
-                    scaleY: [1, 1.5, 2.5, 1.5, 1],
-                    transition: { duration: 1.2, repeat: Infinity, delay: i * 0.2 }
-                }}
-            />
-        ))}
+        {
+            [0, 1, 2, 3].map(i => (
+                <motion.div
+                    key={i}
+                    className="w-1 bg-blue-500"
+                    animate={{ scaleY: [1, 1.5, 2.5, 1.5, 1], transition: { duration: 1.2, repeat: Infinity, delay: i * 0.2 } }}
+                />
+            ))
+        }
     </motion.div>
 );
 
-// Renders each step of the AI's thought process
+// FIXED: Corrected the JSX syntax and formatting for readability
 const StepItem = ({ step, onMatchSelect, isStarting }: { step: Step, onMatchSelect: (figureId: string) => void, isStarting: string | null }) => {
     const ICONS = {
         log: <Bot className="h-4 w-4 text-primary" />,
@@ -73,19 +76,18 @@ export function CollaborativeSearch() {
     const [isSearching, setIsSearching] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [logSteps, setLogSteps] = useState<Step[]>([]);
+    const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const recognitionRef = useRef<any>(null); // To hold SpeechRecognition instance
+    const recognitionRef = useRef<any>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-    // Scroll to bottom of logs as they appear
     useEffect(() => {
         if (scrollAreaRef.current) {
             scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
         }
     }, [logSteps]);
 
-    // Setup Web Speech API for voice input
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
@@ -108,7 +110,7 @@ export function CollaborativeSearch() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            if (file.size > 5 * 1024 * 1024) {
                 toast.error("File is too large", { description: "Please select a file smaller than 5MB." });
                 return;
             }
@@ -142,6 +144,7 @@ export function CollaborativeSearch() {
             if (contextFile) {
                 formData.append('file', contextFile);
             }
+            formData.append('use_web_search', String(isWebSearchEnabled));
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/figures/search`, {
                 method: 'POST',
@@ -167,7 +170,6 @@ export function CollaborativeSearch() {
                     }
                 }
             }
-
         } catch (err: any) {
             toast.error("Search Failed", { description: err.message });
             setLogSteps([{ id: 'error-1', type: 'error', payload: 'An unexpected error occurred during the search.' }]);
@@ -186,7 +188,6 @@ export function CollaborativeSearch() {
         }
     }, [isListening]);
 
-    // --- RENDER LOGIC ---
     if (isSearching || logSteps.length > 0) {
         return (
             <div className="w-full rounded-lg border bg-muted/40 p-4 transition-all">
@@ -238,6 +239,7 @@ export function CollaborativeSearch() {
             </div>
 
             <div className="flex justify-between items-center">
+                <TooltipProvider>
                 <div className="flex items-center gap-1">
                      <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} title="Add context file">
                         <Paperclip className="h-4 w-4 mr-1" /> Add Context
@@ -246,7 +248,18 @@ export function CollaborativeSearch() {
                     <Button variant="ghost" size="sm" onClick={toggleListening} title={isListening ? "Stop listening" : "Speak query"} className={cn(isListening && "text-blue-500")}>
                         <Mic className="h-4 w-4 mr-1" /> Speak Query
                     </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" onClick={() => setIsWebSearchEnabled(prev => !prev)} className={cn(isWebSearchEnabled && "bg-primary/10 text-primary")}>
+                                <Globe className="h-4 w-4 mr-1" /> Modern Context
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{isWebSearchEnabled ? "ON: AI will use general knowledge." : "OFF: AI will only use archive data."}</p>
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
+                </TooltipProvider>
                  <AnimatePresence>
                     {contextFile && (
                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}>

@@ -24,6 +24,7 @@ router = APIRouter()
 async def search_for_figure_streaming(
     query: str = Form(...),
     file: Optional[UploadFile] = File(None),
+    use_web_search: bool = Form(False),  # ADDED: Accept the web search flag
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -35,7 +36,6 @@ async def search_for_figure_streaming(
     if not query:
         raise HTTPException(status_code=400, detail="Query parameter cannot be empty.")
 
-    # MODIFIED: Implement file content reading
     file_context = None
     if file:
         try:
@@ -48,7 +48,6 @@ async def search_for_figure_streaming(
             logger.error(
                 f"Failed to read or decode uploaded file '{file.filename}': {e}"
             )
-            # Continue without file context if it fails
             file_context = None
 
     result = await session.execute(select(HistoricalFigure))
@@ -56,9 +55,9 @@ async def search_for_figure_streaming(
 
     async def stream_generator():
         # SSE format requires "data: " prefix and "\n\n" suffix
-        # MODIFIED: Pass file_context to the service
+        # MODIFIED: Pass both file_context and use_web_search to the service
         async for event in gemini_service.stream_figure_search(
-            query, all_figures, file_context=file_context
+            query, all_figures, file_context=file_context, use_web_search=use_web_search
         ):
             yield f"data: {json.dumps(event)}\n\n"
         # Signal the end of the stream to the client
@@ -67,7 +66,7 @@ async def search_for_figure_streaming(
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 
-# ... (the rest of the file is unchanged)
+# ... (rest of file is unchanged)
 @router.get("/featured", response_model=List[HistoricalFigureRead])
 async def get_featured_figures(
     session: AsyncSession = Depends(get_session),
