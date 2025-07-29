@@ -1,0 +1,7 @@
+qdrant-client
+asyncio
+aiohttp
+python-dotenv
+google-generativeai
+beautifulsoup4
+tqdm
